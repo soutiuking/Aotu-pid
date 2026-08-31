@@ -1,0 +1,46 @@
+# ==================== 通用 ====================
+.DS_Store
+Thumbs.db
+Desktop.ini
+*~
+*.bak
+*.tmp
+*.log
+
+# ==================== ESP-IDF (aotu pid esp32) ====================
+# 构建产物目录
+aotu pid esp32/build/
+# sdkconfig 由 sdkconfig.defaults 生成, 不入库
+aotu pid esp32/sdkconfig
+aotu pid esp32/sdkconfig.old
+# 组件管理器自动下载的依赖
+aotu pid esp32/managed_components/
+aotu pid esp32/dependencies.lock
+
+# ==================== Keil MDK (aotu pid stm32) ====================
+# 编译输出目录 (Listings/Objects)
+aotu pid stm32/MDK-ARM/aotu pid stm32/
+# Keil 用户界面布局文件 (每人不同)
+*.uvguix.*
+# 编译备份
+aotu pid stm32/MDK-ARM/*.bak
+
+# ==================== 直接移植的官方库 (不入库, 恢复方式见 README) ====================
+# ST 官方 HAL 固件库与 CMSIS, 共约 68MB
+# 恢复方式: 用 STM32CubeMX 重新生成, 或从 STM32CubeF1 固件包复制
+aotu pid stm32/Drivers/CMSIS/
+aotu pid stm32/Drivers/STM32F1xx_HAL_Driver/
+
+# ==================== 编译中间产物兜底 ====================
+*.o
+*.d
+*.crf
+*.axf
+*.lnp
+*.dep
+*.lst
+*.map
+*.htm
+*.elf
+*.bin
+*.hex

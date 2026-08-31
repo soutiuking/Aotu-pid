@@ -1,0 +1,19 @@
+# 文本文件统一由 git 规范化处理
+* text=auto
+
+# 明确的二进制类型 (即便误入工作区也不做换行转换)
+*.bin -text
+*.hex -text
+*.axf -text
+*.elf -text
+*.o -text
+*.a -text
+*.lib -text
+*.png -text
+*.jpg -text
+*.ico -text
+
+# Windows 下 Keil/CubeMX 工程文件保持 CRLF, 避免整个文件级 diff
+*.uvprojx text eol=crlf
+*.uvoptx text eol=crlf
+*.ioc text eol=crlf

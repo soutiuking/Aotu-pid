@@ -1,0 +1,28 @@
+idf_component_register(
+    SRCS
+        "app_main.cpp"
+        "wifi_manager.cpp"
+        "uart_manager.cpp"
+        "protocol_client.cpp"
+        "pid_manager.cpp"
+        "autotune_manager.cpp"
+        "device_status.cpp"
+        "web_server.cpp"
+        "protocol/frame_builder.c"
+        "protocol/protocol_crc.c"
+        "protocol/protocol_parser.c"
+        "storage/esp32_config.cpp"
+    INCLUDE_DIRS
+        "."
+        "protocol"
+        "storage"
+    REQUIRES
+        esp_wifi
+        nvs_flash
+        esp_http_server
+        esp_timer
+        driver
+        json
+    EMBED_FILES
+        "web/index.html"
+)

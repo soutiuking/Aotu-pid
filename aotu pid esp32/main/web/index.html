@@ -1,0 +1,533 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>DOME PID 调试助手</title>
+<style>
+:root{--bg:#0f1420;--card:#1a2130;--card2:#212a3d;--line:#2c374d;--txt:#e6ecf5;--sub:#8fa0b8;
+--acc:#3b82f6;--ok:#22c55e;--warn:#f59e0b;--bad:#ef4444;--r:12px}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--txt);font:14px/1.5 -apple-system,"Segoe UI",Roboto,"PingFang SC","Microsoft YaHei",sans-serif;padding-bottom:70px}
+.wrap{max-width:1000px;margin:0 auto;padding:12px}
+h2{font-size:15px;margin-bottom:8px;color:var(--acc)}
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:12px;margin-bottom:12px}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px}
+.field{display:flex;flex-direction:column;gap:2px}
+.field label{font-size:12px;color:var(--sub)}
+input,select{background:var(--card2);border:1px solid var(--line);color:var(--txt);border-radius:8px;padding:7px 9px;font-size:14px;width:100%}
+input:focus,select:focus{outline:1px solid var(--acc)}
+button{background:var(--card2);color:var(--txt);border:1px solid var(--line);border-radius:8px;padding:8px 12px;font-size:13px;cursor:pointer}
+button:active{transform:scale(.97)}
+button.p{background:var(--acc);border-color:var(--acc);color:#fff}
+button.g{background:var(--ok);border-color:var(--ok);color:#06220f}
+button.r{background:var(--bad);border-color:var(--bad);color:#fff}
+button.w{background:var(--warn);border-color:var(--warn);color:#3a2a00}
+button:disabled{opacity:.4;cursor:not-allowed}
+.tag{display:inline-block;padding:2px 9px;border-radius:20px;font-size:12px;background:var(--card2);border:1px solid var(--line)}
+.tag.ok{color:var(--ok);border-color:var(--ok)}
+.tag.bad{color:var(--bad);border-color:var(--bad)}
+.tag.warn{color:var(--warn);border-color:var(--warn)}
+.mono{font-family:ui-monospace,Consolas,monospace;font-size:12px}
+.kv{display:flex;justify-content:space-between;gap:6px;font-size:13px;padding:2px 0}
+.kv b{color:var(--acc)}
+#chart{width:100%;height:240px;background:var(--card2);border-radius:8px;touch-action:none}
+.errstat{color:var(--sub);font-size:12px;margin-top:4px}
+#logbox{background:#0b0f18;border:1px solid var(--line);border-radius:8px;height:200px;overflow-y:auto;padding:8px;font-family:ui-monospace,Consolas,monospace;font-size:11px;white-space:pre-wrap;word-break:break-all}
+#logbox .rx{color:#6ee7a0}#logbox .tx{color:#7fb2ff}#logbox .er{color:#ff8080}
+.tabs{display:flex;gap:6px;margin-bottom:8px}
+.tabs button.on{background:var(--acc);border-color:var(--acc);color:#fff}
+.safe{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.safe button{padding:14px 8px;font-size:14px;font-weight:600}
+.estop{grid-column:1/3;background:var(--bad);border-color:var(--bad);font-size:16px}
+.confirm{position:fixed;inset:0;background:rgba(0,0,0,.55);display:none;align-items:center;justify-content:center;z-index:9}
+.confirm .box{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:18px;max-width:340px;width:88%}
+.confirm .box p{margin-bottom:14px}
+.prog{height:8px;background:var(--card2);border-radius:4px;overflow:hidden;margin:4px 0}
+.prog i{display:block;height:100%;background:var(--acc);width:0%}
+.at-note{color:var(--sub);font-size:12px;margin:4px 0 8px}.at-result input[readonly]{opacity:.85}
+@media(max-width:640px){.grid{grid-template-columns:1fr 1fr}.safe{grid-template-columns:1fr 1fr}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<!-- ============ 设备连接区 ============ -->
+<div class="card">
+  <div class="row" style="justify-content:space-between">
+    <h2 style="margin:0">设备连接</h2>
+    <div>
+      <span class="tag" id="t_wifi">Wi-Fi: -</span>
+      <span class="tag" id="t_stm">STM32 离线</span>
+      <span class="tag" id="t_ws">WS 未连接</span>
+    </div>
+  </div>
+  <div class="grid" style="margin-top:8px">
+    <div class="kv"><span>IP</span><b class="mono" id="v_ip">-</b></div>
+    <div class="kv"><span>固件</span><b class="mono" id="v_fw">-</b></div>
+    <div class="kv"><span>协议版本</span><b class="mono" id="v_pv">-</b></div>
+    <div class="kv"><span>MCU</span><b class="mono" id="v_mcu">-</b></div>
+    <div class="kv"><span>最后通信</span><b class="mono" id="v_last">-</b></div>
+    <div class="kv"><span>错误 CRC/超时</span><b class="mono" id="v_err">0/0</b></div>
+  </div>
+  <div class="row" style="margin-top:8px">
+    <button onclick="cmd('device_info')">刷新设备信息</button>
+    <button onclick="cmd('device_reset')">重启 STM32</button>
+    <input id="in_ssid" placeholder="Wi-Fi SSID" style="max-width:150px">
+    <input id="in_pass" placeholder="Wi-Fi 密码" type="password" style="max-width:150px">
+    <button onclick="wifiSave()">连接 Wi-Fi</button>
+  </div>
+</div>
+
+<!-- ============ 安全控制区 ============ -->
+<div class="card" style="border-color:var(--bad)">
+  <h2 style="color:var(--bad)">安全控制 (优先)</h2>
+  <div class="safe">
+    <button class="r estop" onclick="estop()">■ 紧急停止</button>
+    <button class="r" onclick="pidCtl('pid_stop')">停止 PID</button>
+    <button class="w" onclick="cmd('set_output',{loop:L(),value:0})">关闭输出</button>
+    <button class="g" onclick="recover()">恢复安全状态</button>
+  </div>
+</div>
+
+<!-- ============ PID 参数区 ============ -->
+<div class="card">
+  <h2>PID 参数</h2>
+  <div class="row" style="margin-bottom:8px">
+    <label style="color:var(--sub);font-size:12px">回路</label>
+    <select id="sel_loop" style="width:120px">
+      <option value="0">0 温度</option><option value="1">1 速度</option><option value="2">2 位置</option>
+    </select>
+    <label style="color:var(--sub);font-size:12px">模式</label>
+    <select id="sel_mode" style="width:100px">
+      <option value="0">手动</option><option value="1">自动</option>
+    </select>
+  </div>
+  <div class="grid">
+    <div class="field"><label>Kp</label><input id="p_kp" type="number" step="0.01"></div>
+    <div class="field"><label>Ki</label><input id="p_ki" type="number" step="0.01"></div>
+    <div class="field"><label>Kd</label><input id="p_kd" type="number" step="0.01"></div>
+    <div class="field"><label>目标值</label><input id="p_target" type="number" step="0.1"></div>
+    <div class="field"><label>输出下限</label><input id="p_omin" type="number" step="0.1"></div>
+    <div class="field"><label>输出上限</label><input id="p_omax" type="number" step="0.1"></div>
+    <div class="field"><label>积分限幅</label><input id="p_ilim" type="number" step="1"></div>
+    <div class="field"><label>采样周期(s)</label><input id="p_ts" type="number" step="0.005" min="0.005"></div>
+    <div class="field"><label>死区</label><input id="p_db" type="number" step="0.01"></div>
+    <div class="field"><label>滤波系数</label><input id="p_flt" type="number" step="0.01" max="0.99"></div>
+    <div class="field"><label>控制方向</label><select id="p_dir"><option value="0">正作用</option><option value="1">反作用</option></select></div>
+  </div>
+  <div class="row" style="margin-top:8px">
+    <button class="p" onclick="readParams()">读取参数</button>
+    <button class="p" onclick="writeParams()">写入参数</button>
+    <button class="g" onclick="confirmThen('保存参数到 STM32 Flash?','save_flash')">保存到 Flash</button>
+    <button onclick="confirmThen('从 Flash 重新加载参数?','load_flash')">从 Flash 加载</button>
+    <button onclick="confirmThen('恢复默认参数 (RAM)?','default_params')">恢复默认值</button>
+    <button onclick="cmd('flash_verify')">校验参数</button>
+  </div>
+  <div class="errstat" id="p_stat"></div>
+</div>
+
+<!-- ============ 自动整定区 ============ -->
+<div class="card" style="border-color:var(--warn)">
+  <div class="row" style="justify-content:space-between">
+    <h2 style="color:var(--warn);margin:0">ESP32 自动整定</h2>
+    <span class="tag warn" id="at_state">IDLE</span>
+  </div>
+  <div class="at-note">
+    自动整定流程由 ESP32 管理。当前版本只提供接口和通信测试页面，不包含实际整定算法；STM32 只执行 PID 控制、输出和反馈采集。
+  </div>
+  <div class="grid">
+    <div class="field"><label>目标值</label><input id="at_target" type="number" step="0.1"></div>
+    <div class="field"><label>激励输出下限</label><input id="at_omin" type="number" step="0.1"></div>
+    <div class="field"><label>激励输出上限</label><input id="at_omax" type="number" step="0.1"></div>
+    <div class="field"><label>允许误差</label><input id="at_allowed" type="number" step="0.1" min="0" value="1"></div>
+    <div class="field"><label>反馈安全下限</label><input id="at_fbmin" type="number" step="0.1" value="-1000"></div>
+    <div class="field"><label>反馈安全上限</label><input id="at_fbmax" type="number" step="0.1" value="1000"></div>
+    <div class="field"><label>最大时间(s)</label><input id="at_maxtime" type="number" step="1" min="1" value="60"></div>
+    <div class="field"><label>最大振荡次数</label><input id="at_maxosc" type="number" step="1" min="1" value="6"></div>
+    <div class="field"><label>整定模式</label><select id="at_mode"><option value="1">继电模式（预留）</option></select></div>
+  </div>
+  <div class="row" style="margin-top:8px">
+    <button class="w" onclick="autotuneStart()">开始自动整定</button>
+    <button class="r" onclick="autotuneCommand('at_stop')">停止</button>
+    <button onclick="autotuneCommand('at_pause')">暂停</button>
+    <button class="g" onclick="autotuneCommand('at_resume')">恢复</button>
+    <button onclick="autotuneStatus()">刷新状态</button>
+    <button onclick="autotuneResult()">读取结果</button>
+    <button class="p" onclick="autotuneApply()">应用结果</button>
+  </div>
+  <div class="grid" style="margin-top:8px">
+    <div class="kv"><span>回路</span><b id="at_loop">0</b></div>
+    <div class="kv"><span>进度</span><b id="at_progress_text">0%</b></div>
+    <div class="kv"><span>振荡次数</span><b id="at_osc">0</b></div>
+    <div class="kv"><span>已用时间</span><b id="at_elapsed">0 s</b></div>
+    <div class="kv"><span>预计剩余</span><b id="at_eta">0 s</b></div>
+    <div class="kv"><span>目标 / 反馈 / 输出</span><b class="mono" id="at_values">- / - / -</b></div>
+  </div>
+  <div class="prog"><i id="at_progress_bar"></i></div>
+  <div class="grid at-result" style="margin-top:8px">
+    <div class="field"><label>结果状态</label><input id="at_result_valid" readonly></div>
+    <div class="field"><label>结果 Kp</label><input id="at_result_kp" readonly></div>
+    <div class="field"><label>结果 Ki</label><input id="at_result_ki" readonly></div>
+    <div class="field"><label>结果 Kd</label><input id="at_result_kd" readonly></div>
+  </div>
+  <div class="errstat" id="at_stat">空函数接口已连接，点击按钮可进行通信和返回值测试。</div>
+</div>
+
+<!-- ============ 实时曲线区 ============ -->
+<div class="card">
+  <h2>实时曲线 (回路 <span id="c_loop">0</span>)</h2>
+  <canvas id="chart"></canvas>
+  <div class="row" style="margin-top:8px">
+    <button id="b_pause" onclick="togglePause()">暂停曲线</button>
+    <button onclick="clearChart()">清空曲线</button>
+    <label style="color:var(--sub);font-size:12px">时间范围</label>
+    <select id="sel_range" style="width:110px">
+      <option value="30">30 秒</option><option value="60" selected>60 秒</option>
+      <option value="300">5 分钟</option><option value="600">10 分钟</option>
+    </select>
+  </div>
+</div>
+
+<!-- ============ 日志区 ============ -->
+<div class="card">
+  <h2>通信日志</h2>
+  <div class="row" style="margin-bottom:6px">
+    <button onclick="logClear()">清空日志</button>
+    <button id="b_logpause" onclick="toggleLogPause()">暂停日志</button>
+    <button onclick="exportLog()">导出日志</button>
+    <span class="tag mono" id="logcnt">0</span>
+  </div>
+  <div id="logbox"></div>
+</div>
+
+</div>
+
+<!-- 确认弹窗 -->
+<div class="confirm" id="dlg">
+  <div class="box">
+    <p id="dlg_text">确认?</p>
+    <div class="row">
+      <button class="p" style="flex:1" onclick="dlgOk()">确认</button>
+      <button style="flex:1" onclick="dlgCancel()">取消</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ================= 状态与工具 ================= */
+let SNAPSHOT=null, WS=null, wsUp=false;
+let chartData=[];           // {t, target, feedback, output, err}
+let chartPaused=false, logPaused=false, lastLog=0;
+let lastSeen=0;
+const $=id=>document.getElementById(id);
+const L=()=>$('sel_loop').selectedIndex;
+const PID_STATE_TXT=['IDLE','RUNNING','PAUSED','MANUAL','SAFE','FAULT'];
+const AT_STATE_TXT=['IDLE','PREPARE','WAIT_STABLE','EXCITATION','COLLECT_DATA','CALCULATE','RESULT_READY','APPLIED','STOPPED','TIMEOUT','ERROR'];
+const AT_RESULT_TXT={0:'无有效结果',1:'结果有效'};
+const ERR_TXT={0:'OK',1:'未知命令',2:'长度错误',3:'CRC错误',4:'帧超时',5:'参数越界',
+ 6:'设备忙',7:'Flash错误',8:'Flash数据无效',9:'PID未运行',10:'整定进行中',11:'整定失败',
+ 12:'整定超时',13:'安全限制',14:'通信错误',15:'版本不支持'};
+
+function fmtErr(e){return '0x'+e.toString(16).padStart(2,'0')+(ERR_TXT[e]?' '+ERR_TXT[e]:'')}
+
+async function api(url,opt){try{const r=await fetch(url,opt);return await r.json()}catch(e){return null}}
+
+/* 命令封装: 写参数/控制/整定 */
+async function cmd(c,body){
+  const j=await api('/api/cmd',{method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify(Object.assign({cmd:c,loop:L()},body||{}))});
+  if(!j){alert('网络错误');return j}
+  if(!j.ok){
+    $('p_stat').textContent='错误: '+fmtErr(j.err)+(j.detail!==undefined&&j.err===5?' (参数索引 '+j.detail+')':'');
+  } else {
+    $('p_stat').textContent='';
+  }
+  return j;
+}
+function pidCtl(c){cmd(c)}
+
+/* 紧急停止: 停 PID + 输出清零 + 恢复安全 */
+async function estop(){
+  if(!confirm('确认紧急停止? 将立即停止 PID 并关闭输出'))return;
+  await cmd('pid_stop');
+  await cmd('set_output',{value:0});
+  logLocal('*** EMERGENCY STOP ***');
+}
+async function recover(){
+  await cmd('pid_stop');
+  $('p_stat').textContent='已恢复安全状态, 请重新读取参数后启动';
+}
+
+/* ================= PID 参数 ================= */
+function fillParams(l){
+  if(!SNAPSHOT||!SNAPSHOT.loops||!SNAPSHOT.loops[l])return;
+  const p=SNAPSHOT.loops[l];
+  $('p_kp').value=p.kp; $('p_ki').value=p.ki; $('p_kd').value=p.kd;
+  $('p_target').value=p.target; $('p_omin').value=p.out_min; $('p_omax').value=p.out_max;
+  $('p_ilim').value=p.integ_lim; $('p_ts').value=p.sample_time;
+  $('p_db').value=p.deadband; $('p_flt').value=p.filter;
+  $('p_dir').value=p.dir; $('sel_mode').value=p.mode;
+}
+async function readParams(){
+  const j=await cmd('read_params');
+  if(!j||!j.ok)return;
+  const p=SNAPSHOT&&SNAPSHOT.loops&&SNAPSHOT.loops[L()];
+  if(p){
+    p.kp=j.kp;p.ki=j.ki;p.kd=j.kd;p.target=j.target;
+    p.out_min=j.out_min;p.out_max=j.out_max;p.integ_lim=j.integ_lim;
+    p.sample_time=j.sample_time;p.deadband=j.deadband;p.filter=j.filter;
+    p.dir=j.dir;p.mode=j.mode;
+    fillParams(L());
+  }
+}
+async function writeParams(){
+  // 前端基础范围校验
+  const v=k=>parseFloat($(k).value);
+  const kp=v('p_kp'),ki=v('p_ki'),kd=v('p_kd'),tg=v('p_target'),
+        omin=v('p_omin'),omax=v('p_omax'),il=v('p_ilim'),
+        ts=v('p_ts'),db=v('p_db'),flt=v('p_flt');
+  const bad=[];
+  if(!(kp>=0&&kp<=500))bad.push('Kp'); if(!(ki>=0&&ki<=500))bad.push('Ki');
+  if(!(kd>=0&&kd<=500))bad.push('Kd');
+  if(!(ts>=0.005&&ts<=1))bad.push('采样周期');
+  if(!(flt>=0&&flt<=0.99))bad.push('滤波系数');
+  if(!(il>=0&&il<=10000))bad.push('积分限幅');
+  if(omin>=omax)bad.push('输出上下限');
+  if(bad.length){$('p_stat').textContent='前端校验失败: '+bad.join(', ')+' 超出范围';return}
+  const j=await cmd('write_params',{
+    kp,ki,kd,target:tg,out_min:omin,out_max:omax,integ_lim:il,
+    sample_time:ts,deadband:db,filter:flt,
+    dir:parseInt($('p_dir').value),mode:parseInt($('sel_mode').value)});
+  if(j&&j.ok)$('p_stat').textContent='写入成功 (RAM, 未保存 Flash)';
+}
+
+/* ================= ESP32 自动整定接口 ================= */
+function atNum(id){
+  const n=parseFloat($(id).value);
+  return Number.isFinite(n)?n:null;
+}
+function atMessage(text, bad){
+  $('at_stat').textContent=text;
+  $('at_stat').style.color=bad?'var(--bad)':'var(--sub)';
+}
+function fillAutotuneDefaults(force){
+  const p=SNAPSHOT&&SNAPSHOT.loops&&SNAPSHOT.loops[L()];
+  const set=(id,value)=>{
+    if(force||!$(id).value)$(id).value=value;
+  };
+  set('at_target',p?p.target:0);
+  set('at_omin',p?p.out_min:-100);
+  set('at_omax',p?p.out_max:100);
+  set('at_allowed',1);
+  set('at_fbmin',-1000);
+  set('at_fbmax',1000);
+  set('at_maxtime',60);
+  set('at_maxosc',6);
+}
+async function autotuneStart(){
+  const target=atNum('at_target'),omin=atNum('at_omin'),omax=atNum('at_omax');
+  const allowed=atNum('at_allowed'),fbmin=atNum('at_fbmin'),fbmax=atNum('at_fbmax');
+  const maxtime=atNum('at_maxtime'),maxosc=atNum('at_maxosc');
+  if([target,omin,omax,allowed,fbmin,fbmax,maxtime,maxosc].some(v=>v===null) ||
+     omin>=omax || allowed<0 || fbmin>=fbmax || maxtime<1 ||
+     maxosc<1 || maxosc>255){
+    atMessage('前端校验失败：请检查整定参数范围。',true);return;
+  }
+  const j=await cmd('at_start',{
+    mode:parseInt($('at_mode').value),target,out_min:omin,out_max:omax,
+    allowed_err:allowed,fb_min:fbmin,fb_max:fbmax,
+    max_time_s:Math.floor(maxtime),max_osc:Math.floor(maxosc)});
+  if(j&&j.ok){
+    atMessage('已发送开始自动整定命令。');
+    await autotuneStatus(true);
+  }
+}
+async function autotuneCommand(name){
+  const j=await cmd(name);
+  if(j&&j.ok){
+    atMessage('命令 '+name+' 已执行。');
+    await autotuneStatus(true);
+  }
+}
+async function autotuneStatus(silent){
+  const j=await cmd('at_status');
+  if(!j||!j.ok){if(!silent)atMessage('读取自动整定状态失败。',true);return j;}
+  const state=Number(j.state)||0,progress=Math.max(0,Math.min(100,Number(j.progress)||0));
+  $('at_loop').textContent=j.loop===255?'-':j.loop;
+  $('at_state').textContent=AT_STATE_TXT[state]||('STATE_'+state);
+  $('at_state').className='tag '+(state===0?'warn':(state===6||state===7?'ok':'bad'));
+  $('at_progress_text').textContent=progress+'%';
+  $('at_progress_bar').style.width=progress+'%';
+  $('at_osc').textContent=j.osc===undefined?'-':j.osc;
+  $('at_elapsed').textContent=(j.elapsed_s===undefined?'-':j.elapsed_s)+' s';
+  $('at_eta').textContent=(j.eta_s===undefined?'-':j.eta_s)+' s';
+  $('at_values').textContent=[j.target,j.feedback,j.output].map(v=>v===undefined?'-':Number(v).toFixed(3)).join(' / ');
+  if(!silent)atMessage('自动整定状态已刷新。');
+  return j;
+}
+async function autotuneResult(){
+  const j=await cmd('at_result');
+  if(!j||!j.ok){atMessage('读取自动整定结果失败。',true);return j;}
+  $('at_result_valid').value=AT_RESULT_TXT[j.valid]||('状态 '+j.valid);
+  $('at_result_kp').value=j.kp===undefined?'-':j.kp;
+  $('at_result_ki').value=j.ki===undefined?'-':j.ki;
+  $('at_result_kd').value=j.kd===undefined?'-':j.kd;
+  atMessage('自动整定结果已刷新。');
+  return j;
+}
+async function autotuneApply(){
+  const j=await cmd('at_apply');
+  if(j&&j.ok){
+    atMessage('自动整定结果已应用。');
+    await readParams();
+    await autotuneResult();
+  }
+}
+
+function wifiSave(){
+  const s=$('in_ssid').value.trim(),p=$('in_pass').value;
+  if(!s){alert('请输入 SSID');return}
+  if(confirm('连接到 Wi-Fi "'+s+'"? ESP32 将切换到 STA 模式'))cmd('wifi_set',{ssid:s,pass:p});
+}
+
+/* ================= 确认弹窗 (Flash 等危险操作) ================= */
+let dlgCb=null;
+function confirmThen(text,c){$('dlg_text').textContent=text;dlgCb=()=>cmd(c);$('dlg').style.display='flex'}
+function dlgOk(){$('dlg').style.display='none';if(dlgCb)dlgCb()}
+function dlgCancel(){$('dlg').style.display='none';dlgCb=null}
+
+/* ================= 曲线 ================= */
+function togglePause(){chartPaused=!chartPaused;$('b_pause').textContent=chartPaused?'恢复曲线':'暂停曲线'}
+function clearChart(){chartData=[];drawChart()}
+function drawChart(){
+  const cv=$('chart'),dpr=window.devicePixelRatio||1;
+  const w=cv.clientWidth,h=cv.clientHeight;
+  if(cv.width!==w*dpr){cv.width=w*dpr;cv.height=h*dpr}
+  const ctx=cv.getContext('2d');ctx.setTransform(dpr,0,0,dpr,0,0);
+  ctx.fillStyle='#212a3d';ctx.fillRect(0,0,w,h);
+  if(chartData.length<2)return;
+  const range=parseInt($('sel_range').value)*1000;
+  const now=chartData[chartData.length-1].t;
+  const t0=now-range;
+  const pts=chartData.filter(p=>p.t>=t0);
+  if(pts.length<2)return;
+  let lo=Infinity,hi=-Infinity;
+  pts.forEach(p=>{lo=Math.min(lo,p.target,p.feedback,p.output);hi=Math.max(hi,p.target,p.feedback,p.output)});
+  if(hi-lo<1){hi=lo+1}
+  const pad=12,ph=h-2*pad,pw=w-2*pad;
+  const X=t=>pad+ (t-t0)/range*pw;
+  const Y=v=>pad+ph-(v-lo)/(hi-lo)*ph;
+  // 网格与刻度
+  ctx.strokeStyle='#2c374d';ctx.fillStyle='#8fa0b8';ctx.font='10px monospace';ctx.lineWidth=1;
+  for(let i=0;i<=4;i++){const y=pad+ph*i/4;ctx.beginPath();ctx.moveTo(pad,y);ctx.lineTo(w-pad,y);ctx.stroke();
+    ctx.fillText((hi-(hi-lo)*i/4).toFixed(1),2,y+4)}
+  const line=(key,color)=>{
+    ctx.strokeStyle=color;ctx.lineWidth=1.6;ctx.beginPath();
+    pts.forEach((p,i)=>{const x=X(p.t),y=Y(p[key]);i?ctx.lineTo(x,y):ctx.moveTo(x,y)});
+    ctx.stroke()};
+  line('target','#f59e0b');line('feedback','#22c55e');line('output','#3b82f6');
+  // 图例
+  ctx.font='11px sans-serif';
+  ctx.fillStyle='#f59e0b';ctx.fillText('目标',pad+4,pad+10);
+  ctx.fillStyle='#22c55e';ctx.fillText('反馈',pad+44,pad+10);
+  ctx.fillStyle='#3b82f6';ctx.fillText('输出',pad+84,pad+10);
+}
+
+/* ================= 日志 ================= */
+function logLocal(t){
+  if(logPaused)return;
+  const d=document.createElement('div');d.textContent=t;$('logbox').appendChild(d);
+  while($('logbox').children.length>400)$('logbox').removeChild($('logbox').firstChild);
+  $('logbox').scrollTop=$('logbox').scrollHeight;
+}
+async function toggleLogPause(){
+  const next=!logPaused;
+  const j=await cmd('log_pause',{paused:next});
+  if(j&&j.ok){
+    logPaused=next;
+    $('b_logpause').textContent=logPaused?'恢复日志':'暂停日志';
+  }
+}
+async function refreshLogs(){
+  const j=await api('/api/logs');
+  if(!j)return;
+  lastLog=j.total;
+  const box=$('logbox');
+  box.innerHTML='';
+  j.logs.forEach(e=>{
+    const d=document.createElement('div');
+    d.className=e.text.startsWith('RX')?'rx':e.text.startsWith('TX')?'tx':
+      (e.text.includes('error')||e.text.includes('ERR'))?'er':'';
+    d.textContent='['+(e.t/1000).toFixed(1)+'] '+e.text;
+    box.appendChild(d);
+  });
+  while(box.children.length>400)box.removeChild(box.firstChild);
+  box.scrollTop=box.scrollHeight;
+  $('logcnt').textContent=j.total;
+}
+function logClear(){lastLog=0;$('logbox').innerHTML='';fetch('/api/cmd',{method:'POST',
+  headers:{'Content-Type':'application/json'},body:JSON.stringify({cmd:'log_clear'})})}
+function exportLog(){
+  const lines=[...$('logbox').children].map(d=>d.textContent).join('\n');
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([lines],{type:'text/plain'}));
+  a.download='dome_log.txt';a.click();
+}
+
+/* ================= WebSocket 与快照 ================= */
+function wsConnect(){
+  const url=(location.protocol==='https:'?'wss://':'ws://')+location.host+'/ws';
+  WS=new WebSocket(url);
+  WS.onopen=()=>{wsUp=true;$('t_ws').textContent='WS 已连接';$('t_ws').className='tag ok'};
+  WS.onclose=()=>{wsUp=false;$('t_ws').textContent='WS 断开, 重连中...';$('t_ws').className='tag bad';
+    setTimeout(wsConnect,2000)};
+  WS.onmessage=ev=>{
+    let m;try{m=JSON.parse(ev.data)}catch(e){return}
+    if(m.log!==undefined){logLocal(m.log);return}
+    SNAPSHOT=m;lastSeen=Date.now();applySnapshot();
+  };
+}
+function applySnapshot(){
+  const s=SNAPSHOT;if(!s)return;
+  // 连接区
+  $('t_stm').textContent=s.online?'STM32 在线':'STM32 离线';
+  $('t_stm').className='tag '+(s.online?'ok':'bad');
+  $('t_wifi').textContent=(s.wifi_sta?'STA ':'AP ')+s.ssid;
+  $('t_wifi').className='tag '+(s.wifi_sta?'ok':'warn');
+  $('v_ip').textContent=s.ip;
+  $('v_fw').textContent=s.fw||'-';
+  $('v_pv').textContent='v'+(s.proto_ver||'-');
+  $('v_mcu').textContent=s.mcu||'-';
+  $('v_last').textContent=s.online?((Date.now()-lastSeen)/1000).toFixed(0)+'s 前':'-';
+  $('v_err').textContent=s.crc_errs+'/'+s.timeout_errs;
+  if(s.online&&s.loops[L()]&&!$('p_kp').value)fillParams(L());
+  // 参数区模式/状态
+  const rt=s.loops[L()];
+  if(rt){$('sel_mode').value=rt.mode}
+  fillAutotuneDefaults(false);
+  // 曲线
+  if(!chartPaused){
+    chartData.push({t:Date.now(),target:rt?rt.target:0,feedback:rt?rt.feedback:0,
+      output:rt?rt.output:0});
+    const range=parseInt($('sel_range').value)*1000;
+    while(chartData.length&&chartData[0].t<Date.now()-range-5000)chartData.shift();
+    drawChart();
+  }
+}
+
+/* ================= 定时器与启动 ================= */
+$('sel_loop').onchange=()=>{$('c_loop').textContent=L();chartData=[];if(SNAPSHOT)fillParams(L());fillAutotuneDefaults(true);autotuneStatus(true)};
+setInterval(()=>{ // 快照兜底轮询 (WS 断开时仍刷新)
+  if(!wsUp)api('/api/status').then(j=>{if(j){SNAPSHOT=j;lastSeen=Date.now();applySnapshot()}});
+},1000);
+setInterval(refreshLogs,1000);
+window.addEventListener('resize',drawChart);
+fillAutotuneDefaults(true);
+setInterval(()=>{if(document.visibilityState==='visible')autotuneStatus(true)},1500);
+wsConnect();
+</script>
+</body>
+</html>
