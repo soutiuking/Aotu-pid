@@ -31,6 +31,31 @@ aotu pid stm32/MDK-ARM/*.bak
 aotu pid stm32/Drivers/CMSIS/
 aotu pid stm32/Drivers/STM32F1xx_HAL_Driver/
 
+# ==================== CubeMX 可重新生成的文件 (不入库, 恢复方式见 README) ====================
+# 以下文件均由 CubeMX 按 .ioc 生成且 USER CODE 区为空, 重新生成即恢复
+aotu pid stm32/.mxproject
+aotu pid stm32/Core/Src/dma.c
+aotu pid stm32/Core/Src/gpio.c
+aotu pid stm32/Core/Src/i2c.c
+aotu pid stm32/Core/Src/usart.c
+aotu pid stm32/Core/Src/stm32f1xx_hal_msp.c
+aotu pid stm32/Core/Src/system_stm32f1xx.c
+aotu pid stm32/Core/Inc/main.h
+aotu pid stm32/Core/Inc/dma.h
+aotu pid stm32/Core/Inc/gpio.h
+aotu pid stm32/Core/Inc/i2c.h
+aotu pid stm32/Core/Inc/usart.h
+aotu pid stm32/Core/Inc/stm32f1xx_it.h
+aotu pid stm32/Core/Inc/stm32f1xx_hal_conf.h
+# CubeMX 生成的 MDK 工程: 重新生成后按 README「如何添加文件」把自有源码加回
+aotu pid stm32/MDK-ARM/startup_stm32f103xb.s
+aotu pid stm32/MDK-ARM/*.uvprojx
+aotu pid stm32/MDK-ARM/*.uvoptx
+aotu pid stm32/MDK-ARM/DebugConfig/
+aotu pid stm32/MDK-ARM/RTE/
+# 例外 (虽由 CubeMX 生成但必须入库, 删除会导致重新生成丢代码):
+#   Core/Src/main.c, Core/Src/stm32f1xx_it.c  —— USER CODE 区含系统集成代码
+
 # ==================== 编译中间产物兜底 ====================
 *.o
 *.d
